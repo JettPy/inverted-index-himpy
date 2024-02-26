@@ -1,5 +1,5 @@
-#ifndef LIB_TEST_LIBRARY_H
-#define LIB_TEST_LIBRARY_H
+#ifndef LIBRARY_H
+#define LIBRARY_H
 
 #include <thread>
 #include <vector>
@@ -109,4 +109,4 @@ public:
     std::vector<std::pair<int, double>> retrieveByHistogram(const std::map<std::string, double> &doc, int count = 10, bool from_end = false, double threshold = 0.001);
 };
 
-#endif //LIB_TEST_LIBRARY_H
+#endif //LIBRARY_H

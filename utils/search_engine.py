@@ -1,4 +1,3 @@
-import time
 from abc import ABC, abstractmethod
 from typing import Union, List, Tuple, Dict
 from himpy.executor import Parser, Evaluator
@@ -8,9 +7,9 @@ import ctypes
 import platform
 
 if platform.uname()[0] == "Windows":
-    lib_name = ".\\mylibrary.dll"
+    lib_name = ".\\invertedindex.dll"
 elif platform.uname()[0] == "Linux":
-    lib_name = "./library.so"
+    lib_name = "./invertedindex.so"
 else:
     lib_name = "./library.dylib"
 
@@ -220,34 +219,12 @@ class InvertedIndexCpp(BaseSearchEngine):
         result = []
         if hasattr(query, "value") and isinstance(query.value, str):
             """Searching by expression"""
-            # start_time = time.time()
-            # expression = ["(" + ", ".join(e) + ")" if isinstance(e, tuple) else e for e in
-            #               self._parser.parse_string(query.value)]
-            # end_time = time.time()
-            # execution_time = (end_time - start_time) * 1000
-            # print("Expression build in milliseconds:", execution_time)
-            # # expression = ["(" + ", ".join(e) + ")" if isinstance(e, tuple) else e for e in self._parser.parse_string(query.value)]
-            # start_time = time.time()
-            # cpp_expr = encodeVectorString(expression)
-            # end_time = time.time()
-            # execution_time = (end_time - start_time) * 1000
-            # print("cpp_expr build in milliseconds:", execution_time)
             expression = ["(" + ", ".join(e) + ")" if isinstance(e, tuple) else e for e in self._parser.parse_string(query.value)]
             cpp_expr = encodeVectorString(expression)
             if top_n:
-                # start_time = time.time()
-                # result = libinvertedindex.retrieveByQuery(self._index, cpp_expr, top_n, False, threshold, size)
-                # end_time = time.time()
-                # execution_time = (end_time - start_time) * 1000
-                # print("retrieveByQuery build in milliseconds:", execution_time)
                 result = libinvertedindex.retrieveByQuery(self._index, cpp_expr, top_n, False, threshold, size)
             else:
                 result = libinvertedindex.retrieveByQuerySingle(self._index, cpp_expr, last_n, True, threshold, size)
-            # start_time = time.time()
-            # libinvertedindex.deleteVectorString(cpp_expr)
-            # end_time = time.time()
-            # execution_time = (end_time - start_time) * 1000
-            # print("deleteVectorString build in milliseconds:", execution_time)
             libinvertedindex.deleteVectorString(cpp_expr)
         elif isinstance(query, Histogram):
             """Searching by data histogram"""
@@ -257,12 +234,6 @@ class InvertedIndexCpp(BaseSearchEngine):
             else:
                 result = libinvertedindex.retrieveByHistogram(self._index, cpp_map, last_n, True, threshold, size)
             libinvertedindex.deleteMapStringDouble(cpp_map)
-        # start_time = time.time()
-        # data = decodeVectorIntDouble(result, size)
-        # end_time = time.time()
-        # execution_time = (end_time - start_time) * 1000
-        # print("decodeVectorIntDouble build in milliseconds:", execution_time)
-        # return data
         return decodeVectorIntDouble(result, size)
     
     def __del__(self):
@@ -271,9 +242,11 @@ class InvertedIndexCpp(BaseSearchEngine):
 
 
 class SearchEngine:
-    def __init__(self, hists: List[Tuple[int, Histogram]], parser: Parser, evaluator: Evaluator, use_index=True):
-        if use_index:
+    def __init__(self, hists: List[Tuple[int, Histogram]], parser: Parser, evaluator: Evaluator, use_index=True, use_cpp=True):
+        if use_index and not use_cpp:
             self._search_engine = InvertedIndex(hists, parser, evaluator)
+        elif use_index and use_cpp:
+            self._search_engine = InvertedIndexCpp(hists, parser)
         else:
             self._search_engine = DefaultSearchEngine(hists, parser, evaluator)
 
