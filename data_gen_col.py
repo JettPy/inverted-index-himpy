@@ -37,7 +37,7 @@ high_level_elements_list = Ecs_set
 evaluator = Evaluator(operations, expressionOperations, high_level_elements=high_level_elements_list)
 
 hists_data = "hists_col.pkcl"
-images_data = "hists_col.pkcl"
+images_data = "images_col.pkcl"
 
 images = list()
 hists = list()
