@@ -142,20 +142,24 @@ class Evaluator:
             return self._EO[op]((op1, key1), (op2, key2))
         else:
             document_ids = set()
-            if isinstance(op, tuple):
-                indexes_set = self._cartesian_product(0, op)
+            if op[0] == "(" and op[-1] == ")":
+                op_tupe = tuple(op.replace("(", "").replace(")", "").split(", "))
+                indexes_set = self._cartesian_product(0, op_tupe)
                 for index in indexes_set:
-                    document_ids.update(elements_sets[index])
-            elif isinstance(op, str) and op == "any":
+                    i = ", ".join(index)
+                    if i in elements_sets:
+                        document_ids.update(elements_sets[i])
+            elif op == "any":
                 indexes_set = set()
                 for high_level_elements_indexes_set in self._extendedE.values():
                     indexes_set.update(high_level_elements_indexes_set)
                     for index in high_level_elements_indexes_set:
                         document_ids.update(elements_sets[index])
-            elif isinstance(op, str) and op in self._extendedE:
+            elif op in self._extendedE:
                 indexes_set = self._extendedE[op]
                 for index in indexes_set:
-                    document_ids.update(elements_sets[index])
+                    if index in elements_sets:
+                        document_ids.update(elements_sets[index])
             else:
                 indexes_set = {op}
                 document_ids.update(elements_sets[op])

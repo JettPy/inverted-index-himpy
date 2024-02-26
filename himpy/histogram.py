@@ -295,6 +295,8 @@ class Histogram1D(Histogram):
         """
 
         # element
+        if element.find(", ") != -1 or element[0] == "(" and element[-1] == ")":
+            element = tuple(element.replace("(", "").replace(")", "").split(", "))
         element_ndim = len(element) if isinstance(element, tuple) else 1
 
         Es = dict()
@@ -318,7 +320,7 @@ class Histogram1D(Histogram):
             if element_ndim == 1:
                 condition = lambda x: x in Es or "any" in Es
             elif element_ndim > 1:
-                condition = lambda x: all([x[i] in Es[i] or "any" in Es[i] for i in range(element_ndim)])
+                condition = lambda x: all([x.split(', ')[i] in Es[i] or "any" in Es[i] for i in range(element_ndim)])
             return HElementSet(h_element_set=set(el for el in self._histogram_elements.values() if condition(el.key)))
 
 
