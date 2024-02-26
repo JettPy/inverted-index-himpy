@@ -101,7 +101,7 @@ def create_histogram(features, normalize=True):
     for i in range(len(counts)):
         item_tuple = elements[i]
         if ndim_features > 1:
-            item_tuple = tuple(map(str, elements[i].tolist()))
+            item_tuple = ', '.join(tuple(map(str, elements[i].tolist())))
         hist[item_tuple] = HElement(item_tuple, counts[i])
     return hist
 
