@@ -6,7 +6,7 @@ from himpy.histogram import operations, expressionOperations
 from himpy.utils import E
 from utils.datasets import ColorImageGenerator
 from utils.feature_extraction import ColorSetTransformer, create_histogram
-from utils.search_engine import SearchEngine, InvertedIndexCpp
+from utils.search_engine import SearchEngine
 
 # =============================================================================================================
 
@@ -88,9 +88,9 @@ else:
 # =============================================================================================================
 
 # Initialize a search engine
-search_engine_default = SearchEngine(hists, parser, evaluator, use_index=False)
-search_engine = SearchEngine(hists, parser, evaluator, use_index=True)
-search_engine_cpp = InvertedIndexCpp(hists, parser, high_level_elements_list)
+search_engine_default = SearchEngine(hists, parser, evaluator)
+search_engine = SearchEngine(hists, parser, evaluator, mode="parallel")
+search_engine_cpp = SearchEngine(hists, parser, evaluator, rules=high_level_elements_list, mode="dll")
 
 # =============================================================================================================
 

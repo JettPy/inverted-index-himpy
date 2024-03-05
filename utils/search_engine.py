@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Union, List, Tuple, Dict
+from typing import Union, List, Tuple
+
+from joblib import Parallel, delayed
+
 from himpy.executor import Parser, Evaluator
 from himpy.histogram import Histogram
 from himpy.utils import E
@@ -105,25 +108,67 @@ class InvertedIndex(BaseSearchEngine):
         return docs_ranked[:top_n]
 
 
+class InvertedIndexParallel(BaseSearchEngine):
+    """Search engine based on inverted indexes of histogram elements in multiple process."""
+
+    def __init__(self, hists: List[Tuple[int, Histogram]], parser: Parser, evaluator: Evaluator):
+        self._parser = parser
+        self._evaluator = evaluator
+        self._storage = dict()
+        self._hists = dict()
+        for hist_id, hist in hists:
+            self._hists[hist_id] = hist
+            for index in hist.elements():
+                self._storage.setdefault(index, set()).add(hist_id)
+
+    def _eval_parallel(self, expression, doc_id):
+        return doc_id, self._evaluator.eval(expression, self._hists[doc_id]).sum()
+
+    def _eval_parallel_hist(self, query, doc_id):
+        return doc_id, (query * self._hists[doc_id]).sum()
+
+    def retrieve(
+            self, query: Union[E, Histogram],
+            top_n: Union[int, None] = 10,
+            last_n: Union[int, None] = None,
+            threshold: float = 0.001):
+        scores = []
+        doc_ids_set = set()
+        if hasattr(query, "value") and isinstance(query.value, str):
+            """Searching by expression"""
+            expression = ["(" + ", ".join(e) + ")" if isinstance(e, tuple) else e for e in self._parser.parse_string(query.value)]
+            doc_ids_set = self._evaluator.eval_expression(expression, self._storage)
+            scores = Parallel(n_jobs=-1, require='sharedmem')(delayed(self._eval_parallel)(expression, doc_id) for doc_id in doc_ids_set)
+
+        elif isinstance(query, Histogram):
+            """Searching by data histogram"""
+            indexes_set = query.elements()
+            for index in indexes_set:
+                if index in self._storage:
+                    doc_ids_set.update(self._storage[index])
+            scores = Parallel(n_jobs=-1, require='sharedmem')(delayed(self._eval_parallel_hist)(query, doc_id) for doc_id in doc_ids_set)
+
+        docs_ranked = sorted(
+            [(doc_id, score) for doc_id, score in scores if score > threshold],
+            key=lambda x: -x[1]
+        )
+
+        if isinstance(last_n, int):
+            return docs_ranked[:top_n], docs_ranked[-last_n:]
+        return docs_ranked[:top_n]
+
+
 libinvertedindex = ctypes.cdll.LoadLibrary(lib_name)
 libinvertedindex.createInvertedIndex.restype = ctypes.c_void_p
 libinvertedindex.deleteInvertedIndex.argtypes = [ctypes.c_void_p]
 libinvertedindex.addDocument.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
-libinvertedindex.retrieveByQuerySingle.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_bool, ctypes.c_double, ctypes.POINTER(ctypes.c_int)]
-libinvertedindex.retrieveByQuerySingle.restype = ctypes.c_void_p
 libinvertedindex.retrieveByQuery.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_bool, ctypes.c_double, ctypes.POINTER(ctypes.c_int)]
 libinvertedindex.retrieveByQuery.restype = ctypes.c_void_p
-libinvertedindex.retrieveByHistogramSingle.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_bool, ctypes.c_double, ctypes.POINTER(ctypes.c_int)]
-libinvertedindex.retrieveByHistogramSingle.restype = ctypes.c_void_p
 libinvertedindex.retrieveByHistogram.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_bool, ctypes.c_double, ctypes.POINTER(ctypes.c_int)]
 libinvertedindex.retrieveByHistogram.restype = ctypes.c_void_p
 
 libinvertedindex.addOneDimensionalRules.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
 libinvertedindex.addMultiDimensionalRules.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-libinvertedindex.evalHistogram.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_int)]
-libinvertedindex.evalHistogram.restype = ctypes.c_void_p
-libinvertedindex.evalExpression.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]
-libinvertedindex.evalExpression.restype = ctypes.c_void_p
 
 libinvertedindex.newMapStringDouble.restype = ctypes.c_void_p
 libinvertedindex.insertIntoMapStringDouble.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_double]
@@ -136,26 +181,9 @@ libinvertedindex.deleteVectorString.argtypes = [ctypes.c_void_p]
 libinvertedindex.getFromVectorIntDouble.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_double)]
 libinvertedindex.deleteVectorIntDouble.argtypes = [ctypes.c_void_p]
 
-libinvertedindex.getFromVectorStringDouble.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_double)]
-libinvertedindex.getFromVectorStringDouble.restype = ctypes.c_char_p
-libinvertedindex.deleteVectorStringDouble.argtypes = [ctypes.c_void_p]
-
-libinvertedindex.getFirstFromPairVectorIntVectorString.argtypes = [ctypes.c_void_p, ctypes.c_int]
-libinvertedindex.getFirstFromPairVectorIntVectorString.restype = ctypes.c_int
-libinvertedindex.getSecondFromPairVectorIntVectorString.argtypes = [ctypes.c_void_p, ctypes.c_int]
-libinvertedindex.getSecondFromPairVectorIntVectorString.restype = ctypes.c_char_p
-libinvertedindex.deletePairVectorIntVectorString.argtypes = [ctypes.c_void_p]
-
-
 libinvertedindex.newVectorPairStringVectorString.restype = ctypes.c_void_p
 libinvertedindex.pushOuterToVectorPairStringVectorString.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
 libinvertedindex.pushInnerToVectorPairStringVectorString.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-libinvertedindex.deleteVectorPairStringVectorString.argtypes = [ctypes.c_void_p]
-
-libinvertedindex.newVectorPairStringVectorInt.restype = ctypes.c_void_p
-libinvertedindex.pushOuterToVectorPairStringVectorInt.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-libinvertedindex.pushInnerToVectorPairStringVectorInt.argtypes = [ctypes.c_void_p, ctypes.c_int]
-libinvertedindex.deleteVectorPairStringVectorInt.argtypes = [ctypes.c_void_p]
 
 
 def encodeVectorString(data: list[str]):
@@ -193,7 +221,7 @@ def decodeVectorIntDouble(data, size) -> list[tuple[int, float]]:
 
 
 class InvertedIndexCpp(BaseSearchEngine):
-    """Search engine based on inverted indexes of histogram elements."""
+    """Search engine based on inverted indexes of histogram elements using DLL library."""
 
     def __init__(self, hists: List[Tuple[int, Histogram]], parser: Parser, rules):
         self._parser = parser
@@ -224,7 +252,7 @@ class InvertedIndexCpp(BaseSearchEngine):
             if top_n:
                 result = libinvertedindex.retrieveByQuery(self._index, cpp_expr, top_n, False, threshold, size)
             else:
-                result = libinvertedindex.retrieveByQuerySingle(self._index, cpp_expr, last_n, True, threshold, size)
+                result = libinvertedindex.retrieveByQuery(self._index, cpp_expr, last_n, True, threshold, size)
             libinvertedindex.deleteVectorString(cpp_expr)
         elif isinstance(query, Histogram):
             """Searching by data histogram"""
@@ -240,15 +268,18 @@ class InvertedIndexCpp(BaseSearchEngine):
         libinvertedindex.deleteInvertedIndex(self._index)
 
 
-
 class SearchEngine:
-    def __init__(self, hists: List[Tuple[int, Histogram]], parser: Parser, evaluator: Evaluator, use_index=True, use_cpp=True):
-        if use_index and not use_cpp:
+    def __init__(self, hists: List[Tuple[int, Histogram]], parser: Parser, evaluator: Evaluator, mode="default", rules=None):
+        if mode == "classic":
             self._search_engine = InvertedIndex(hists, parser, evaluator)
-        elif use_index and use_cpp:
-            self._search_engine = InvertedIndexCpp(hists, parser)
-        else:
+        elif mode == "dll":
+            self._search_engine = InvertedIndexCpp(hists, parser, rules)
+        elif mode == "parallel":
+            self._search_engine = InvertedIndexParallel(hists, parser, evaluator)
+        elif mode == "default":
             self._search_engine = DefaultSearchEngine(hists, parser, evaluator)
+        else:
+            raise NotImplemented("Not implemented yet.")
 
     def retrieve(
             self, query: Union[E, Histogram],
@@ -256,4 +287,3 @@ class SearchEngine:
             last_n: Union[int, None] = None,
             threshold: float = 0.001):
         return self._search_engine.retrieve(query, top_n, last_n, threshold)
-
