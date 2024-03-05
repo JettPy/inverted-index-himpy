@@ -137,9 +137,9 @@ else:
 # =============================================================================================================
 
 # Initialize a search engine
-search_engine_default = SearchEngine(hists, parser, evaluator, use_index=False)
-search_engine = SearchEngine(hists, parser, evaluator, use_index=True)
-search_engine_cpp = InvertedIndexCpp(hists, parser, high_level_elements_list)
+search_engine_default = SearchEngine(hists, parser, evaluator)
+search_engine = SearchEngine(hists, parser, evaluator, mode="classic")
+search_engine_cpp = SearchEngine(hists, parser, evaluator, rules=high_level_elements_list, mode="dll")
 
 # =============================================================================================================
 
@@ -241,5 +241,5 @@ print("Total retrieved images:", len(ranked_images__sample))
 for i in range(len(hists)//100):
     step = i * 100
     test_data = hists[:step]
-    search_engine = SearchEngine(hists, parser, evaluator, use_index=True)
-    search_engine_cpp = InvertedIndexCpp(hists, parser, high_level_elements_list)
+    search_engine = SearchEngine(hists, parser, evaluator, mode="classic")
+    search_engine_cpp = SearchEngine(hists, parser, evaluator, mode="dll", rules=high_level_elements_list)

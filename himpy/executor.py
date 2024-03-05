@@ -143,8 +143,8 @@ class Evaluator:
         else:
             document_ids = set()
             if op[0] == "(" and op[-1] == ")":
-                op_tupe = tuple(op.replace("(", "").replace(")", "").split(", "))
-                indexes_set = self._cartesian_product(0, op_tupe)
+                op_tuple = tuple(op.replace("(", "").replace(")", "").split(", "))
+                indexes_set = self._cartesian_product(0, op_tuple)
                 for index in indexes_set:
                     i = ", ".join(index)
                     if i in elements_sets:
